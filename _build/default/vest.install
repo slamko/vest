@@ -1,0 +1,8 @@
+lib: [
+  "_build/install/default/lib/vest/META"
+  "_build/install/default/lib/vest/dune-package"
+  "_build/install/default/lib/vest/opam"
+]
+bin: [
+  "_build/install/default/bin/vest"
+]

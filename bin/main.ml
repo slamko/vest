@@ -3,17 +3,35 @@ open Sys
 let vest_file_cap = "Vestfile"
 let vest_file_low = "vestfile"
 
-type valentry = { 
-  valargs: string;
-  program: string
-}
+type valargs = string
+type program = string
 
 type token =
   | Space
   | Newline
   | Colon
-  | Char
+  | Char of char
   | EOF
+
+type separator = 
+  | Colon
+  | Newline
+  | EOF
+
+type symbol = 
+  | Text of string
+  | Separator of separator
+
+type rsymbol = {
+  symbol: string;
+  separator: separator
+}
+
+type valentry = { 
+  name: string;
+  valargs: valargs;
+  program: program
+}
 
 let error_no_vestfile () =
   prerr_endline "error: No Vestfile found in the current directory"
@@ -28,7 +46,7 @@ let parsechar chanel =
     | ' ' -> Ok Space
     | '\t' -> Ok Space
     | '\n' -> Ok Newline
-    | _ -> Ok Char
+    | _ -> Ok (Char c)
   with 
     End_of_file ->
       close_in chanel ;
@@ -36,11 +54,39 @@ let parsechar chanel =
     | _ -> 
       close_in_noerr chanel ;
       Error "eror reading the file"
+  
+(*let matchtoken token psymbol = 
+  match token with 
+    | Char c -> psymbol ^ (Char.escaped c)
+    | Space -> psymbol ^ ' '
+    | Newline -> { symbol = psymbol; separator = separator.Newline }
+    | Colon -> separator.Colon
+    | EOF -> separator.EOF 
+*)
+let rec read (psymbol: string) vestfilc =  
+  match parsechar vestfilc with 
+  | Ok token ->  
+    match token with 
+    | Char c -> Ok @@ (read (psymbol ^ (Char.escaped c))) vestfilc
+    | Space -> Ok @@ (read (psymbol ^ " ")) vestfilc
+    | Newline -> Ok { symbol = psymbol; separator = Newline }
+    | Colon -> Ok Colon
+    | EOF -> Ok EOF 
+  | Error err -> Error err 
+  |  _ -> Error "err" 
+
+let read_symbol vestfilc schar = 
+  in
+  read []
+
+let rec parse_symbols vestfilc = 
+  match parsechar vestfilc with 
+  | Ok token -> 
+  | Error  err -> 
 
 let parse_entries vestfile = 
   let vestfilc = open_in vestfile in
-  (*let rec read_vestfile = 
-    *)  
+  
   Error "ERROR"
 
 let find_vestfile () = 
@@ -53,10 +99,9 @@ let find_vestfile () =
 let () =
   match find_vestfile () with
   | Some vestfile -> 
-      let som () = match parse_entries vestfile with 
+      match parse_entries vestfile with 
       | Ok e -> print_endline "ok"
-      | Error s -> print_endline "ka" in
-      som ()
-  | None -> print_endline "No vestfile found in the current directory";;
+      | Error s -> print_endline "ka" 
+  | None -> print_endline "No vestfile found in the current directory" ;;
 
   print_endline ""
