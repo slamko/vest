@@ -1,9 +1,9 @@
-# dune exec vest
+# dune build
 # OCAMLPARAM: unset
 # Shared cache: disabled
-# Workspace root: /home/slamko/Documents/proj/ocaml/vestproj/vest
+# Workspace root: /home/slamko/docs/proj/ocaml/vestproj/vest
 # Auto-detected concurrency: 2
-$ /usr/bin/ocamlc.opt -config > /tmp/dune_4f633f_output
+$ /usr/bin/ocamlc.opt -config > /tmp/dune_1d1b56_output
 # Dune context:
 #  { name = "default"
 #  ; kind = "default"
@@ -25,18 +25,15 @@ $ /usr/bin/ocamlc.opt -config > /tmp/dune_4f633f_output
 #        { "DUNE_OCAML_HARDCODED" :
 #            "/home/slamko/.opam/ocaml-system.4.11.1/lib"
 #        ; "DUNE_OCAML_STDLIB" : "/usr/lib/ocaml"
-#        ; "DUNE_SOURCEROOT" :
-#            "/home/slamko/Documents/proj/ocaml/vestproj/vest"
+#        ; "DUNE_SOURCEROOT" : "/home/slamko/docs/proj/ocaml/vestproj/vest"
 #        ; "INSIDE_DUNE" :
-#            "/home/slamko/Documents/proj/ocaml/vestproj/vest/_build/default"
+#            "/home/slamko/docs/proj/ocaml/vestproj/vest/_build/default"
 #        ; "OCAMLFIND_IGNORE_DUPS_IN" :
-#            "/home/slamko/Documents/proj/ocaml/vestproj/vest/_build/install/default/lib"
+#            "/home/slamko/docs/proj/ocaml/vestproj/vest/_build/install/default/lib"
 #        ; "OCAMLPATH" :
-#            "/home/slamko/Documents/proj/ocaml/vestproj/vest/_build/install/default/lib"
+#            "/home/slamko/docs/proj/ocaml/vestproj/vest/_build/install/default/lib"
 #        ; "OCAMLTOP_INCLUDE_PATH" :
-#            "/home/slamko/Documents/proj/ocaml/vestproj/vest/_build/install/default/lib/toplevel"
-#        ; "OCAML_COLOR" : "always"
-#        ; "OPAMCOLOR" : "always"
+#            "/home/slamko/docs/proj/ocaml/vestproj/vest/_build/install/default/lib/toplevel"
 #        }
 #  ; findlib_path = [ External "/home/slamko/.opam/ocaml-system.4.11.1/lib" ]
 #  ; arch_sixtyfour = true
@@ -113,3 +110,13 @@ $ /usr/bin/ocamlc.opt -config > /tmp/dune_4f633f_output
 #      ; windows_unicode = false
 #      }
 #  }
+$ (cd _build/default && /usr/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I bin/.main.eobjs/byte -I bin/.main.eobjs/native -I lib/.vest.objs/byte -I lib/.vest.objs/native -intf-suffix .ml -no-alias-deps -opaque -o bin/.main.eobjs/native/dune__exe__Main.cmx -c -impl bin/main.ml)
+> File "bin/main.ml", line 75, characters 55-57:
+> 75 |       | EOF -> Ok{ symbol = psymbol; separator = EOF } in
+>                                                             ^^
+> Error: Syntax error: 'end' expected
+> File "bin/main.ml", line 69, characters 4-9:
+> 69 |     begin 
+>          ^^^^^
+>   This 'begin' might be unmatched
+[2]

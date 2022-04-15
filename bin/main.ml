@@ -5,11 +5,13 @@ let vest_file_low = "vestfile"
 
 type valargs = string
 type program = string
+type symtext = string
 
 type token =
   | Space
   | Newline
   | Colon
+  | Tab
   | Char of char
   | EOF
 
@@ -19,7 +21,12 @@ type separator =
   | EOF
 
 type symbol = 
-  | Text of string
+  | Text of symtext
+  | Empty of string
+  | Separator of separator
+
+type clsymbol = 
+  | Text of symtext
   | Separator of separator
 
 type rsymbol = {
@@ -54,35 +61,54 @@ let parsechar chanel =
     | _ -> 
       close_in_noerr chanel ;
       Error "eror reading the file"
-  
-(*let matchtoken token psymbol = 
-  match token with 
-    | Char c -> psymbol ^ (Char.escaped c)
-    | Space -> psymbol ^ ' '
-    | Newline -> { symbol = psymbol; separator = separator.Newline }
-    | Colon -> separator.Colon
-    | EOF -> separator.EOF 
-*)
-let rec read (psymbol: string) vestfilc =  
-  match parsechar vestfilc with 
-  | Ok token ->  
-    match token with 
-    | Char c -> Ok @@ (read (psymbol ^ (Char.escaped c))) vestfilc
-    | Space -> Ok @@ (read (psymbol ^ " ")) vestfilc
-    | Newline -> Ok { symbol = psymbol; separator = Newline }
-    | Colon -> Ok Colon
-    | EOF -> Ok EOF 
-  | Error err -> Error err 
-  |  _ -> Error "err" 
 
-let read_symbol vestfilc schar = 
-  in
-  read []
+let matchtoken token : symbol = 
+  match token with
+  | Char c -> Text (Char.escaped c)
+  | Space -> Empty " "
+  | Tab -> Empty "\t"
+  | Newline -> Separator Newline
+  | Colon -> Separator Colon
+  | EOF -> Separator EOF   
 
-let rec parse_symbols vestfilc = 
-  match parsechar vestfilc with 
-  | Ok token -> 
-  | Error  err -> 
+let matchclrtok token = 
+  match token |> matchtoken with 
+  | Text text -> Text text
+  | Empty text -> Text text
+  | Separator separator -> Separator separator
+
+let matchtok_withpr parsedsym token  = 
+  match token |> matchclrtok with 
+  | Text text -> Text (parsedsym ^ text)
+  | Separator separator -> Separator separator
+
+let read_symbol vestfilc schr = 
+  let rec read psymbol vestfilc =  
+    match parsechar vestfilc with 
+    | Ok token ->  
+      begin
+        match matchtok_withpr psymbol token  with 
+        | Text text -> read text vestfilc
+        | Separator sep -> 
+          let parsedsym = { symbol = psymbol; separator = sep } in
+          Ok parsedsym
+        end
+        | Error err -> Error err in
+  let startsym = Char.escaped schr in
+  read startsym vestfilc
+
+
+let parse_symbols vestfilc = 
+  let rec parse vestfilc = 
+    match parsechar vestfilc with 
+    | Ok token -> 
+      begin 
+        match matchclrtok token with 
+        | Text text ->
+        | Separator separator -> 
+      end 
+    | Error err -> Error err in 
+  parse vestfilc    
 
 let parse_entries vestfile = 
   let vestfilc = open_in vestfile in
