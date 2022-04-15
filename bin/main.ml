@@ -20,13 +20,17 @@ type separator =
   | Newline
   | EOF
 
-type symbol = 
-  | Text of symtext
-  | Empty of string
-  | Separator of separator
+type empty = 
+  | Space
+  | Tab
 
 type clsymbol = 
   | Text of symtext
+  | Separator of separator
+
+type symbol = 
+  | Text of symtext
+  | Empty of empty
   | Separator of separator
 
 type rsymbol = {
@@ -46,7 +50,7 @@ let error_no_vestfile () =
 let execute_valentries valentrylist = 
   0
 
-let parsechar chanel = 
+let parsechar chanel : (token, string) result = 
   try 
     let c = input_char chanel in
     match c with 
@@ -65,21 +69,16 @@ let parsechar chanel =
 let matchtoken token : symbol = 
   match token with
   | Char c -> Text (Char.escaped c)
-  | Space -> Empty " "
-  | Tab -> Empty "\t"
+  | Space -> Empty Space
+  | Tab -> Empty Tab
   | Newline -> Separator Newline
   | Colon -> Separator Colon
   | EOF -> Separator EOF   
 
-let matchclrtok token = 
+let matchtok_withpr parsedsym token : clsymbol = 
   match token |> matchtoken with 
-  | Text text -> Text text
-  | Empty text -> Text text
-  | Separator separator -> Separator separator
-
-let matchtok_withpr parsedsym token  = 
-  match token |> matchclrtok with 
   | Text text -> Text (parsedsym ^ text)
+  | Empty _ -> Text parsedsym
   | Separator separator -> Separator separator
 
 let read_symbol vestfilc schr = 
@@ -94,21 +93,40 @@ let read_symbol vestfilc schr =
           Ok parsedsym
         end
         | Error err -> Error err in
-  let startsym = Char.escaped schr in
-  read startsym vestfilc
+  read schr vestfilc
 
+let some fg dg = 
+  print_char dg ;
+  fg + 5
+
+let acc = some 
+
+let append_parsedsym seq rsymbol = 
+  seq @ [Text rsymbol.symbol] @ [Separator rsymbol.separator]
+
+let appendsym vestfilc seq = 
+  function 
+  | Text ch -> 
+    begin 
+      match read_symbol vestfilc ch with 
+      | Ok parsed -> Ok (parsed |> append_parsedsym seq)
+      | Error err -> Error err
+    end
+  | Empty empty -> Ok (seq @ [Empty empty])
+  | Separator separator -> Ok (seq @ [Separator separator])
 
 let parse_symbols vestfilc = 
-  let rec parse vestfilc = 
+  let rec parse vestfilc symbols : (symbol list, string) result = 
     match parsechar vestfilc with 
     | Ok token -> 
       begin 
-        match matchclrtok token with 
-        | Text text ->
-        | Separator separator -> 
+        let symb = matchtoken token |> appendsym vestfilc symbols in
+        match symb with 
+        | Ok symbs -> parse vestfilc symbs
+        | Error err -> Error err
       end 
     | Error err -> Error err in 
-  parse vestfilc    
+  parse vestfilc [] 
 
 let parse_entries vestfile = 
   let vestfilc = open_in vestfile in
@@ -125,9 +143,11 @@ let find_vestfile () =
 let () =
   match find_vestfile () with
   | Some vestfile -> 
+    begin
       match parse_entries vestfile with 
       | Ok e -> print_endline "ok"
       | Error s -> print_endline "ka" 
-  | None -> print_endline "No vestfile found in the current directory" ;;
+    end
+  | None -> error_no_vestfile () ;;
 
   print_endline ""
