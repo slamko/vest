@@ -1,4 +1,6 @@
 open Sys
+open Option
+open Result
 
 let vest_file_cap = "Vestfile"
 let vest_file_low = "vestfile"
@@ -62,7 +64,8 @@ let parsechar chanel c : (token, string) result =
   try 
     match c with 
     | ' ' -> Ok Space
-    | '\t' -> Ok Space
+    | '\t' -> Ok Tab
+    | ':' -> Ok Colon
     | '\n' -> Ok Newline
     | _ -> Ok (Char c)
   with 
@@ -86,6 +89,10 @@ let (++) symb symapp : symtext =
   match symb with 
   | Symtext s -> begin match symapp with 
     | Symtext sapp -> Symtext (s ^ sapp) end
+
+let (>>) s f =
+  match s with  
+  | Symtext s -> f s
 
 let matchtok_withpr parsedsym token = 
   match token |> matchtoken with 
@@ -132,8 +139,8 @@ let parse_symbols vestfilc =
     | Error err -> Error err in 
   parse vestfilc [] 
 
-let parse_entries vestfile = 
-  let vestfilc = open_in vestfile in
+let parse_entries symbols = 
+  
   
   Error "ERROR"
 
@@ -144,14 +151,33 @@ let find_vestfile () =
   then Some vest_file_low
   else None
 
+let separator2str = function 
+  | Syntactsep sep -> 
+    begin match sep with 
+    | Newline -> "New line"
+    | Colon -> "Colon" end
+  | EOF -> "EOF"
+
+let rec print_symbols = function 
+  | [] -> ()
+  | h::t -> 
+    begin match h with 
+    | `Text text -> 
+      text >> print_string ;
+    | `Empty _ -> print_endline "Empty"
+    | `Separator sep -> sep |> separator2str |> print_string end ;
+    print_char ',' ;
+    print_symbols t
+
+let runflow vestfile = 
+  let source = open_in vestfile in
+  match parse_symbols source with 
+  | Ok symbols -> symbols |> print_symbols
+  | Error err -> prerr_string err
+
 let () =
   match find_vestfile () with
-  | Some vestfile -> 
-    begin
-      match parse_entries vestfile with 
-      | Ok e -> print_endline "ok"
-      | Error s -> print_endline "ka" 
-    end
-  | None -> error_no_vestfile () ;;
+  | Some vestfile -> runflow vestfile
+  | None -> error_no_vestfile () ;
 
   print_endline ""
