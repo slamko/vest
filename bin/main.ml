@@ -3,9 +3,9 @@ open Sys
 let vest_file_cap = "Vestfile"
 let vest_file_low = "vestfile"
 
-type valargs = string
-type program = string
-type symtext = string
+type valargs = Valargs of string
+type program = Program of string
+type symtext = Symtext of string
 
 type token =
   | Space
@@ -15,26 +15,28 @@ type token =
   | Char of char
   | EOF
 
-type separator = 
+type syntactsep = 
   | Colon
   | Newline
+
+type separator = 
+  | Syntactsep of syntactsep
   | EOF
 
 type empty = 
   | Space
   | Tab
 
-type clsymbol = 
-  | Text of symtext
-  | Separator of separator
+type basesym = [
+  | `Text of symtext
+  | `Separator of separator]
 
-type symbol = 
-  | Text of symtext
-  | Empty of empty
-  | Separator of separator
+type symbol = [
+  | basesym
+  | `Empty of empty ]
 
 type rsymbol = {
-  symbol: string;
+  symbol: symtext;
   separator: separator
 }
 
@@ -47,12 +49,17 @@ type valentry = {
 let error_no_vestfile () =
   prerr_endline "error: No Vestfile found in the current directory"
 
-let execute_valentries valentrylist = 
+let evalentries valentrylist = 
   0
 
-let parsechar chanel : (token, string) result = 
+let tofsymt symtext = 
+  `Text symtext
+
+let synsep sep = 
+  `Separator (Syntactsep sep)
+
+let parsechar chanel c : (token, string) result = 
   try 
-    let c = input_char chanel in
     match c with 
     | ' ' -> Ok Space
     | '\t' -> Ok Space
@@ -68,62 +75,59 @@ let parsechar chanel : (token, string) result =
 
 let matchtoken token : symbol = 
   match token with
-  | Char c -> Text (Char.escaped c)
-  | Space -> Empty Space
-  | Tab -> Empty Tab
-  | Newline -> Separator Newline
-  | Colon -> Separator Colon
-  | EOF -> Separator EOF   
+  | Char c -> Symtext (Char.escaped c) |> tofsymt
+  | Space -> `Empty Space
+  | Tab -> `Empty Tab
+  | Newline -> synsep Newline
+  | Colon -> synsep Colon
+  | EOF -> `Separator EOF   
 
-let matchtok_withpr parsedsym token : clsymbol = 
+let (++) symb symapp : symtext = 
+  match symb with 
+  | Symtext s -> begin match symapp with 
+    | Symtext sapp -> Symtext (s ^ sapp) end
+
+let matchtok_withpr parsedsym token = 
   match token |> matchtoken with 
-  | Text text -> Text (parsedsym ^ text)
-  | Empty _ -> Text parsedsym
-  | Separator separator -> Separator separator
+  | `Text text -> parsedsym ++ text |> tofsymt
+  | `Empty _ -> tofsymt parsedsym
+  | `Separator separator -> `Separator separator
+
 
 let read_symbol vestfilc schr = 
-  let rec read psymbol vestfilc =  
-    match parsechar vestfilc with 
+  let rec read vestfilc psymbol = 
+    let rch = input_char vestfilc in 
+    match parsechar vestfilc rch with 
     | Ok token ->  
-      begin
-        match matchtok_withpr psymbol token  with 
-        | Text text -> read text vestfilc
-        | Separator sep -> 
+      begin match matchtok_withpr psymbol token  with 
+        | `Text text -> read vestfilc text 
+        | `Separator sep -> 
           let parsedsym = { symbol = psymbol; separator = sep } in
           Ok parsedsym
-        end
-        | Error err -> Error err in
-  read schr vestfilc
-
-let some fg dg = 
-  print_char dg ;
-  fg + 5
-
-let acc = some 
+      end
+    | Error err -> Error err in
+  read vestfilc schr 
 
 let append_parsedsym seq rsymbol = 
-  seq @ [Text rsymbol.symbol] @ [Separator rsymbol.separator]
-
-let appendsym vestfilc seq = 
-  function 
-  | Text ch -> 
-    begin 
-      match read_symbol vestfilc ch with 
-      | Ok parsed -> Ok (parsed |> append_parsedsym seq)
-      | Error err -> Error err
-    end
-  | Empty empty -> Ok (seq @ [Empty empty])
-  | Separator separator -> Ok (seq @ [Separator separator])
+  seq @ [`Text rsymbol.symbol] @ [`Separator rsymbol.separator]
 
 let parse_symbols vestfilc = 
   let rec parse vestfilc symbols : (symbol list, string) result = 
-    match parsechar vestfilc with 
+    let rch = input_char vestfilc in 
+    match parsechar vestfilc rch with 
     | Ok token -> 
-      begin 
-        let symb = matchtoken token |> appendsym vestfilc symbols in
-        match symb with 
-        | Ok symbs -> parse vestfilc symbs
-        | Error err -> Error err
+      begin match matchtoken token with
+        | `Text ch ->
+          begin match read_symbol vestfilc ch with 
+            | Ok parsed -> parsed |> append_parsedsym symbols |> parse vestfilc
+            | Error err -> Error err
+          end
+        | `Empty empty -> symbols @ [`Empty empty] |> parse vestfilc
+        | `Separator separator -> 
+            begin match separator with 
+            | Syntactsep sep -> symbols @ [synsep sep] |> parse vestfilc
+            | EOF -> Ok (symbols @ [`Separator EOF])
+            end 
       end 
     | Error err -> Error err in 
   parse vestfilc [] 
