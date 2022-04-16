@@ -109,7 +109,7 @@ let read_symbol vestfilc schr =
   read vestfilc schr 
 
 let append_parsedsym seq rsymbol = 
-  seq @ [`Text rsymbol.symbol] @ [`Separator rsymbol.separator]
+  `Text rsymbol.symbol :: `Separator rsymbol.separator :: seq
 
 let parse_symbols vestfilc = 
   let rec parse vestfilc symbols : (symbol list, string) result = 
@@ -122,11 +122,11 @@ let parse_symbols vestfilc =
             | Ok parsed -> parsed |> append_parsedsym symbols |> parse vestfilc
             | Error err -> Error err
           end
-        | `Empty empty -> symbols @ [`Empty empty] |> parse vestfilc
+        | `Empty empty -> `Empty empty :: symbols |> parse vestfilc
         | `Separator separator -> 
             begin match separator with 
-            | Syntactsep sep -> symbols @ [synsep sep] |> parse vestfilc
-            | EOF -> Ok (symbols @ [`Separator EOF])
+            | Syntactsep sep -> synsep sep :: symbols |> parse vestfilc
+            | EOF -> Ok (`Separator EOF :: symbols)
             end 
       end 
     | Error err -> Error err in 
