@@ -1,0 +1,6 @@
+**/_build/
+vest
+*.o
+*.cmi
+*.cmo
+*.cmx

@@ -1,2 +1,2 @@
-some: --tool=memcheck 
-	sldm add some dwm
+some:
+sldm add some dwm
