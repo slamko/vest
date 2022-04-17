@@ -185,14 +185,15 @@ let clean_emptysymbs symbols =
       begin match h.value with 
       | `Text _ -> h :: puresymbols |> clean t
       | `Separator _ -> h :: puresymbols |> clean t
-      | `Empty _ -> clean t puresymbols end
+      | `Empty _ -> puresymbols |> clean t end
     | [] -> puresymbols in
   clean symbols []
 
 let parse_entries symbols = 
-  let rec parse entries = function
-    | 
-  parse symbols [] 
+  let rec parse expected entries = function 
+    | h::t -> ewdew
+    | [] -> entries in
+  parse  [] symbols
 
 let find_vestfile () = 
   if file_exists vest_file_cap
@@ -204,26 +205,41 @@ let find_vestfile () =
 let rec print_symbols = function 
   | [] -> ()
   | h::t -> 
-    begin match h with 
+    begin match h.value with 
     | `Text text -> 
       text >> print_string ;
-      | `Empty empty -> empty |> empty2str |> print_string
-      | `Separator sep -> sep |> sep2str |> print_string end ;
+    | `Empty empty -> empty |> empty2str |> print_string
+    | `Separator sep -> sep |> sep2str |> print_string end ;
   print_char ',' ;
   print_endline "";
   print_symbols t
 
 let print symbols = symbols |> List.rev |> print_symbols
 
-let runflow vestfile = 
+let runflow symbols = 
+  let result = 
+    symbols 
+    |> clean_emptysymbs 
+    |> List.rev 
+    |> parse_entries 
+  in
+  match result with 
+  | Ok _ -> ()
+  | Error err ->
+    prerr_string err ;
+    exit 1
+
+let main vestfile = 
   let source = open_in vestfile in
   match parse_symbols source with 
   | Ok symbols -> 
     symbols |> print ;
-    symbols |> clean_emptysymbs |> List.rev ; ()
-  | Error err -> prerr_string err
+    runflow symbols
+  | Error err -> 
+      prerr_string err ;
+      exit 1
 
 let () =
   match find_vestfile () with
-  | Some vestfile -> runflow vestfile
+  | Some vestfile -> main vestfile
   | None -> error_no_vestfile ()
