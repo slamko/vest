@@ -7,6 +7,7 @@ type valargs = Valargs of string
 type program = Program of string
 type symtext = Symtext of string
 type entryname = Entryname of string
+type syntaxerror = SyntaxError of string
 
 type token =
   | Space
@@ -56,11 +57,34 @@ type valentry = {
   program: program
 }
 
+type parsestate = 
+  | ExpectEntry
+  | ExpectColonSeparator
+  | ExpectValargs
+  | ExpectNewline
+  | ExpectProgram
+
 let error_no_vestfile () =
   prerr_endline "error: No Vestfile found in the current directory"
 
 let evalentries valentrylist = 
   0
+
+let (++) symb symapp : symtext = 
+  match symb with 
+  | Symtext s -> begin match symapp with 
+    | Symtext sapp -> Symtext (s ^ sapp) end
+
+let symappend = (++)
+
+let sunwrap = function 
+  | Symtext s -> s
+
+let (>>) s f = sunwrap s |> f 
+
+let (<<) s = Symtext s
+
+let tosym = (<<)
 
 let tofsymt symtext = 
   `Text symtext
@@ -76,8 +100,23 @@ let empty2str = function
   | Space -> " "
   | Tab -> "\t"
 
+let sym2str = function 
+  | `Text text -> sunwrap text 
+  | `Separator sep -> sep2str sep
+  | `Empty empty -> empty2str empty
+
 let synsep sep = 
   `Separator (Syntactsep sep)
+
+let unexpectedsymbol_error unexpsym expsym = 
+  Error (
+    SyntaxError(
+      "Unexpected symbol: " ^ (sym2str unexpsym.value) ^
+      " at line: " ^ (string_of_int unexpsym.pos.linenum) ^ ".\n" ^
+      "Epected symbol: " ^ expsym ))
+
+let prerr = function
+  | SyntaxError s -> prerr_string s
 
 let parsechar chanel : (token, string) result = 
   try 
@@ -104,21 +143,6 @@ let matchtoken token : symval =
   | Newline -> synsep Newline
   | Colon -> synsep Colon
   | EOF -> `Separator EOF   
-
-let (++) symb symapp : symtext = 
-  match symb with 
-  | Symtext s -> begin match symapp with 
-    | Symtext sapp -> Symtext (s ^ sapp) end
-
-let symappend = (++)
-
-let (>>) s f =
-  match s with  
-  | Symtext s -> f s
-
-let (<<) s = Symtext s
-
-let tosym = (<<)
 
 let matchtokpref parsedsym token = 
   match token |> matchtoken with 
@@ -189,11 +213,69 @@ let clean_emptysymbs symbols =
     | [] -> puresymbols in
   clean symbols []
 
-let parse_entries symbols = 
-  let rec parse expected entries = function 
-    | h::t -> ewdew
-    | [] -> entries in
-  parse  [] symbols
+let alertentry newentry = function 
+  | _::t -> newentry::t
+  | [] -> []
+
+let parse_entries symbols : (valentry list, syntaxerror) result  = 
+  let rec parse expected entries symbols = match symbols with 
+    | h::t ->
+        begin match expected with
+        | ExpectEntry -> begin match h.value with
+          | `Text text -> 
+            let newentry = { 
+              name = text >> (fun s -> Entryname s); 
+              valargs = Valargs ""; 
+              program = Program "" 
+              } in
+            parse ExpectColonSeparator (newentry :: entries) t
+          | `Separator sep -> begin match sep with 
+            | EOF -> Ok entries 
+            | _ -> parse ExpectEntry entries t end
+          | _ -> parse ExpectEntry entries t end
+        | ExpectColonSeparator -> 
+          let unmatched = synsep Colon |> sym2str |>  unexpectedsymbol_error h in
+          begin match h.value with
+          | `Separator sep -> begin match sep with 
+            | Syntactsep syntactsep -> begin match syntactsep with 
+              | Colon -> parse ExpectValargs entries t
+              | _ -> unmatched end 
+            | _ -> unmatched end
+          | _ -> unmatched end
+        | ExpectValargs -> 
+          let unmatched = "Valgrind args" |>  unexpectedsymbol_error h in
+          begin match h.value with
+          | `Text text -> 
+            let lastentry = entries |> List.hd in
+            let entrywithargs = { lastentry with valargs = text >> (fun s -> Valargs s) } in
+            let nentries = alertentry entrywithargs entries in
+            parse ExpectColonSeparator nentries t
+          | _ -> "Valgrind args" |> unexpectedsymbol_error h end
+        | ExpectNewline ->
+          let unmatched = synsep Newline |> sym2str |>  unexpectedsymbol_error h in
+          begin match h.value with
+          | `Separator sep -> begin match sep with 
+            | Syntactsep syntactsep -> begin match syntactsep with 
+              | Newline -> parse ExpectNewline entries t
+              | _ -> unmatched end 
+            | _ -> unmatched end
+          | _ -> unmatched end
+        | ExpectProgram -> 
+          let unmatched = "Program" |>  unexpectedsymbol_error h in
+          begin match h.value with
+          | `Text text -> 
+            let lastentry = entries |> List.hd in
+            let entrywithprogram = { lastentry with program = text >> (fun s -> Program s) } in
+            let nentries = alertentry entrywithprogram entries in
+            parse ExpectNewline nentries t
+          | `Separator sep -> begin match sep with 
+            | Syntactsep syntactsep -> begin match syntactsep with 
+              | Newline -> parse ExpectProgram entries t
+              | _ -> unmatched end 
+            | _ -> unmatched end
+          | _ -> unmatched end end
+    | [] -> Ok (entries) in
+  parse ExpectEntry [] symbols
 
 let find_vestfile () = 
   if file_exists vest_file_cap
@@ -204,12 +286,7 @@ let find_vestfile () =
 
 let rec print_symbols = function 
   | [] -> ()
-  | h::t -> 
-    begin match h.value with 
-    | `Text text -> 
-      text >> print_string ;
-    | `Empty empty -> empty |> empty2str |> print_string
-    | `Separator sep -> sep |> sep2str |> print_string end ;
+  | h::t -> sym2str h.value |> print_string ;
   print_char ',' ;
   print_endline "";
   print_symbols t
@@ -226,7 +303,7 @@ let runflow symbols =
   match result with 
   | Ok _ -> ()
   | Error err ->
-    prerr_string err ;
+    prerr err ;
     exit 1
 
 let main vestfile = 
