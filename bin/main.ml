@@ -57,11 +57,19 @@ let evalentries valentrylist =
 let tofsymt symtext = 
   `Text symtext
 
+let sep2str = function 
+  | Syntactsep sep -> 
+    begin match sep with 
+    | Newline -> "New line"
+    | Colon -> "Colon" end
+  | EOF -> "EOF"
+
 let synsep sep = 
   `Separator (Syntactsep sep)
 
-let parsechar chanel c : (token, string) result = 
+let parsechar chanel : (token, string) result = 
   try 
+    let c = input_char chanel in 
     match c with 
     | ' ' -> Ok Space
     | '\t' -> Ok Tab
@@ -103,8 +111,7 @@ let matchtok_withpr parsedsym token =
 
 let read_symbol vestfilc schr = 
   let rec read vestfilc psymbol = 
-    let rch = input_char vestfilc in 
-    match parsechar vestfilc rch with 
+    match parsechar vestfilc with 
     | Ok token ->  
       begin match matchtok_withpr psymbol token  with 
         | `Text text -> read vestfilc text 
@@ -120,8 +127,7 @@ let append_parsedsym seq rsymbol =
 
 let parse_symbols vestfilc = 
   let rec parse vestfilc symbols : (symbol list, string) result = 
-    let rch = input_char vestfilc in 
-    match parsechar vestfilc rch with 
+    match parsechar vestfilc with 
     | Ok token -> 
       begin match matchtoken token with
         | `Text ch ->
@@ -129,18 +135,18 @@ let parse_symbols vestfilc =
             | Ok parsed -> parsed |> append_parsedsym symbols |> parse vestfilc
             | Error err -> Error err
           end
-        | `Empty empty -> `Empty empty :: symbols |> parse vestfilc
+        | `Empty empty -> 
+          `Empty empty :: symbols |> parse vestfilc
         | `Separator separator -> 
-            begin match separator with 
-            | Syntactsep sep -> synsep sep :: symbols |> parse vestfilc
-            | EOF -> Ok (`Separator EOF :: symbols)
-            end 
+          begin match separator with 
+          | Syntactsep sep -> synsep sep :: symbols |> parse vestfilc
+          | EOF -> Ok (`Separator EOF :: symbols)
+          end 
       end 
     | Error err -> Error err in 
   parse vestfilc [] 
 
 let parse_entries symbols = 
-  
   
   Error "ERROR"
 
@@ -151,23 +157,17 @@ let find_vestfile () =
   then Some vest_file_low
   else None
 
-let separator2str = function 
-  | Syntactsep sep -> 
-    begin match sep with 
-    | Newline -> "New line"
-    | Colon -> "Colon" end
-  | EOF -> "EOF"
-
 let rec print_symbols = function 
   | [] -> ()
   | h::t -> 
     begin match h with 
     | `Text text -> 
       text >> print_string ;
-    | `Empty _ -> print_endline "Empty"
-    | `Separator sep -> sep |> separator2str |> print_string end ;
-    print_char ',' ;
-    print_symbols t
+      | `Empty _ -> print_string "Empty"
+      | `Separator sep -> sep |> sep2str |> print_string end ;
+  print_char ',' ;
+  print_endline "";
+  print_symbols t
 
 let runflow vestfile = 
   let source = open_in vestfile in
@@ -178,6 +178,4 @@ let runflow vestfile =
 let () =
   match find_vestfile () with
   | Some vestfile -> runflow vestfile
-  | None -> error_no_vestfile () ;
-
-  print_endline ""
+  | None -> error_no_vestfile ()
