@@ -151,7 +151,6 @@ let parsechar chanel : (token, operror) result =
   with 
     End_of_file ->
       close_in chanel ;
-      print_endline "eof";
       Ok EOF
     | _ -> 
       close_in_noerr chanel ;
@@ -164,9 +163,7 @@ let matchtoken token : symval =
   | Tab -> `Empty Tab
   | Newline -> synsep Newline
   | Colon -> synsep Colon
-  | EOF -> 
-    print_endline "eof match";
-    `Separator EOF   
+  | EOF -> `Separator EOF   
 
 let matchtokpref parsedsym token = 
   match token |> matchtoken with 
@@ -181,7 +178,6 @@ let read_symbol vestfilc schr =
       begin match matchtokpref psymbol token  with 
         | `Text text -> read vestfilc text 
         | `Separator sep -> 
-          print_endline "eof exit";
           let parsedsym = { symbol = psymbol; separator = sep } in
           Ok parsedsym
       end
@@ -253,9 +249,18 @@ let alertentry newentry = function
   | _::t -> newentry::t
   | [] -> []
 
+let preventry = function 
+  | h::_ -> h
+  | [] -> { 
+      name = `Entryname ""; 
+      valargs = `Valargs ""; 
+      program = `Program "" 
+    }
+
 let parse_entries symbols : (valentry list, operror) result  = 
   let rec parse expected entries symbols = match symbols with 
     | h::t ->
+        let lastentry = entries |> preventry in
         begin match expected with
         | ExpectEntry -> begin match h.value with
           | `Text text -> 
@@ -282,7 +287,6 @@ let parse_entries symbols : (valentry list, operror) result  =
           let unmatched = "Valgrind args" |> unexpectedsymbol_error h in
           begin match h.value with
           | `Text text -> 
-            let lastentry = entries |> List.hd in
             let entrywithargs = { lastentry with valargs = text >> (fun s -> `Valargs s) } in
             let nentries = alertentry entrywithargs entries in
             parse ExpectTerminateArgs nentries t
@@ -305,7 +309,6 @@ let parse_entries symbols : (valentry list, operror) result  =
           let unmatched = "Program" |> unexpectedsymbol_error h in
           begin match h.value with
           | `Text text -> 
-            let lastentry = entries |> List.hd in
             let entrywithprogram = { lastentry with program = text >> (fun s -> `Program s) } in
             let nentries = alertentry entrywithprogram entries in
             parse ExpectCloseEntry nentries t
@@ -322,7 +325,7 @@ let parse_entries symbols : (valentry list, operror) result  =
             | Syntactsep syntactsep -> begin match syntactsep with 
               | Newline -> parse ExpectEntry entries t
               | _ -> unmatched end 
-            | _ -> unmatched end
+            | EOF -> parse ExpectEntry entries t end
           | _ -> unmatched end end
     | [] -> Ok entries in
   parse ExpectEntry [] symbols
