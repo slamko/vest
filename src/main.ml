@@ -7,7 +7,11 @@ type valargs = [ `Valargs of string ]
 type program = [ `Program of string ]
 type entryname = [ `Entryname of string ]
 type symtext = Symtext of string
-type syntaxerror = SyntaxError of string
+
+type operror = 
+  | Nothing of string
+  | VestfileError of string
+  | SyntaxError of string 
 
 type token =
   | Space
@@ -64,12 +68,6 @@ type parsestate =
   | ExpectTerminateArgs
   | ExpectProgram
   | ExpectCloseEntry
-
-let error_no_vestfile () =
-  prerr_endline "error: No Vestfile found in the current directory"
-
-let evalentries valentrylist = 
-  0
 
 let (++) symb symapp : symtext = 
   match symb with 
@@ -131,11 +129,15 @@ let unexpectedsymbol_error unexpsym expsym =
       "Expected: " ^ expsym ^ "\n" ))
 
 let prerr = function
-  | SyntaxError s -> prerr_string s
+  | Nothing err -> prerr_string err
+  | VestfileError err -> prerr_string err
+  | SyntaxError err -> prerr_string err
 
-let serror s = Error (SyntaxError s)
+let synterror err = Error (SyntaxError err)
+let syserror err = Error (SyntaxError err)
+let nothing err = Error (Nothing err)
 
-let parsechar chanel : (token, syntaxerror) result = 
+let parsechar chanel : (token, operror) result = 
   try 
     let c = input_char chanel in 
     match c with 
@@ -150,7 +152,7 @@ let parsechar chanel : (token, syntaxerror) result =
       Ok EOF
     | _ -> 
       close_in_noerr chanel ;
-      serror "eror reading the file"
+      synterror "eror reading the file"
 
 let matchtoken token : symval = 
   match token with
@@ -202,7 +204,7 @@ let append_parsedsym seq parsedsym =
   seq |> appendsym @@ `Text parsedsym.symbol |> appendsym @@ `Separator parsedsym.separator 
 
 let parse_symbols vestfilc = 
-  let rec parse vestfilc symbols : (symbol list, syntaxerror) result = 
+  let rec parse vestfilc symbols : (symbol list, operror) result = 
     match parsechar vestfilc with 
     | Ok token -> 
       begin match matchtoken token with
@@ -237,7 +239,7 @@ let alertentry newentry = function
   | _::t -> newentry::t
   | [] -> []
 
-let parse_entries symbols : (valentry list, syntaxerror) result  = 
+let parse_entries symbols : (valentry list, operror) result  = 
   let rec parse expected entries symbols = match symbols with 
     | h::t ->
         begin match expected with
@@ -311,12 +313,31 @@ let parse_entries symbols : (valentry list, syntaxerror) result  =
     | [] -> Ok entries in
   parse ExpectEntry [] symbols
 
+let rec eval_entries valentries = 
+    match valentries with 
+    | h::t -> 
+      begin try 
+        command @@ "valgrind " ^ entryval2str h.valargs |> ignore ;
+        eval_entries t
+      with err -> Printexc.to_string err |> syserror end
+    | [] -> Ok ()
+  
+let check_entries = function 
+    | [] -> nothing "No entries specified in Vestfile"
+    | entries -> Ok entries
+
 let find_vestfile () = 
   if file_exists vest_file_cap
-  then Some vest_file_cap
+  then Ok vest_file_cap
   else if file_exists vest_file_low
-  then Some vest_file_low
-  else None
+  then Ok vest_file_low
+  else syserror "error: No Vestfile found in the current directory"
+
+let openvestfile vestfile = 
+  try 
+    let vestfilc = open_in vestfile in
+    Ok vestfilc
+  with _ -> syserror "error: Can not open Vestfile"
 
 let rec print f = function 
   | [] -> ()
@@ -329,23 +350,20 @@ let (>>=) r f = match r with
   | Ok value -> f value
   | Error err -> Error err
 
-let runflow vestfile = 
-  let source = open_in vestfile in
+let () = 
   let result = 
-    source 
-    |> parse_symbols
+    find_vestfile ()
+    >>= openvestfile
+    >>= parse_symbols
     >>= clean_emptysymbs 
     >>= parse_entries 
+    >>= check_entries
+    >>= eval_entries
     (*
     *)
   in
   match result with 
-  | Ok value -> value |> print entry2str
+  | Ok value -> value (*|> print entry2str *)
   | Error err ->
     prerr err ;
     exit 1
-
-let () =
-  match find_vestfile () with
-  | Some vestfile -> runflow vestfile
-  | None -> error_no_vestfile ()
