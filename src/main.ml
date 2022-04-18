@@ -1,5 +1,4 @@
 open Sys
-
 let vest_file_cap = "Vestfile"
 let vest_file_low = "vestfile"
 
@@ -74,14 +73,16 @@ let (++) symb symapp : symtext =
   | Symtext s -> begin match symapp with 
     | Symtext sapp -> Symtext (s ^ sapp) end
 
-let symappend = (++)
-
 let sunwrap = function 
   | Symtext s -> s
 
 let (>>) s f = sunwrap s |> f 
 
 let (<<) s = Symtext s
+
+let (>>=) r f = match r with 
+  | Ok value -> f value
+  | Error err -> Error err
 
 let tosym = (<<)
 
@@ -97,7 +98,7 @@ let sep2str = function
 
 let empty2str = function 
   | Space -> " "
-  | Tab -> "\t"
+  | Tab -> "\t" 
 
 let symval2str = function 
   | `Text text -> sunwrap text 
@@ -133,9 +134,10 @@ let prerr = function
   | VestfileError err -> prerr_string err
   | SyntaxError err -> prerr_string err
 
-let synterror err = Error (SyntaxError err)
-let syserror err = Error (SyntaxError err)
-let nothing err = Error (Nothing err)
+let synterror err = Error (SyntaxError  ("error: " ^ err ^ "\n"))
+let syserror err = Error (SyntaxError  ("error: " ^ err ^ "\n"))
+let nothing err = Error (Nothing  ("error: " ^ err ^ "\n"))
+let vestfilerr err = Error (VestfileError ("error: " ^ err ^ "\n"))
 
 let parsechar chanel : (token, operror) result = 
   try 
@@ -149,10 +151,11 @@ let parsechar chanel : (token, operror) result =
   with 
     End_of_file ->
       close_in chanel ;
+      print_endline "eof";
       Ok EOF
     | _ -> 
       close_in_noerr chanel ;
-      synterror "eror reading the file"
+      vestfilerr "error reading the file"
 
 let matchtoken token : symval = 
   match token with
@@ -161,7 +164,9 @@ let matchtoken token : symval =
   | Tab -> `Empty Tab
   | Newline -> synsep Newline
   | Colon -> synsep Colon
-  | EOF -> `Separator EOF   
+  | EOF -> 
+    print_endline "eof match";
+    `Separator EOF   
 
 let matchtokpref parsedsym token = 
   match token |> matchtoken with 
@@ -176,6 +181,7 @@ let read_symbol vestfilc schr =
       begin match matchtokpref psymbol token  with 
         | `Text text -> read vestfilc text 
         | `Separator sep -> 
+          print_endline "eof exit";
           let parsedsym = { symbol = psymbol; separator = sep } in
           Ok parsedsym
       end
@@ -203,13 +209,21 @@ let appendsym symval (seq: symbol list) =
 let append_parsedsym seq parsedsym = 
   seq |> appendsym @@ `Text parsedsym.symbol |> appendsym @@ `Separator parsedsym.separator 
 
+let reached_eof parsedsym = match parsedsym.separator with
+  | EOF -> true
+  | _ -> false
+
 let parse_symbols vestfilc = 
   let rec parse vestfilc symbols : (symbol list, operror) result = 
     match parsechar vestfilc with 
     | Ok token -> 
       begin match matchtoken token with
         | `Text ch -> begin match read_symbol vestfilc ch with 
-            | Ok parsed -> parsed |> append_parsedsym symbols |> parse vestfilc
+            | Ok parsed -> 
+              let appended = parsed |> append_parsedsym symbols in
+              if reached_eof parsed 
+              then Ok appended
+              else parse vestfilc appended
             | Error err -> Error err
           end
         | `Empty empty -> symbols |> appendsym @@ `Empty empty |> parse vestfilc
@@ -313,17 +327,34 @@ let parse_entries symbols : (valentry list, operror) result  =
     | [] -> Ok entries in
   parse ExpectEntry [] symbols
 
+let rec parse_valout valoutc = 
+  try
+    let valline = input_line valoutc in
+    print_string valline ;
+    parse_valout valoutc
+  with 
+    | End_of_file -> 
+      Unix.close_process_in valoutc |> ignore ;
+      Ok ()
+    | _ -> 
+      Unix.close_process_in valoutc |> ignore ;
+      syserror "error: Failed to handle Valgrind output"
+
 let rec eval_entries valentries = 
     match valentries with 
     | h::t -> 
       begin try 
-        command @@ "valgrind " ^ entryval2str h.valargs |> ignore ;
-        eval_entries t
+        let valargs = [|entryval2str h.valargs; entryval2str h.program|] in
+        let valresult = 
+          Unix.open_process_args_in "valgrind" valargs |> parse_valout in
+        match valresult with 
+        | Ok _ -> eval_entries t
+        | Error err -> Error err
       with err -> Printexc.to_string err |> syserror end
     | [] -> Ok ()
   
 let check_entries = function 
-    | [] -> nothing "No entries specified in Vestfile"
+    | [] -> nothing "No entries found in Vestfile\n"
     | entries -> Ok entries
 
 let find_vestfile () = 
@@ -331,24 +362,21 @@ let find_vestfile () =
   then Ok vest_file_cap
   else if file_exists vest_file_low
   then Ok vest_file_low
-  else syserror "error: No Vestfile found in the current directory"
+  else vestfilerr "error: No Vestfile found in the current directory"
 
 let openvestfile vestfile = 
   try 
     let vestfilc = open_in vestfile in
     Ok vestfilc
-  with _ -> syserror "error: Can not open Vestfile"
+  with _ -> vestfilerr "error: Can not open Vestfile"
+
 
 let rec print f = function 
   | [] -> ()
   | h::t -> f h |> print_string ;
   print_char ',' ;
   print_endline "";
-  print f t
-
-let (>>=) r f = match r with 
-  | Ok value -> f value
-  | Error err -> Error err
+  print f t 
 
 let () = 
   let result = 
