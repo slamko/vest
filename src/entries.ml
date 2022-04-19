@@ -1,9 +1,48 @@
 open Types
 
+let rec parse_valout valoutc = 
+  try
+    let valline = input_line valoutc in
+    print_string valline ;
+    parse_valout valoutc
+  with 
+    | End_of_file -> 
+      Unix.close_process_in valoutc |> ignore ;
+      Ok ()
+    | _ -> 
+      Unix.close_process_in valoutc |> ignore ;
+      syserror "error: Failed to handle Valgrind output"
+
+let rec eval_entries valentries = 
+  match valentries with 
+  | h::t -> 
+    begin try 
+      print_endline "" ;
+      print_endline "" ;
+      print_endline "| | | | | | | | | | | " ;
+      print_string @@ entryval2str h.name ;
+      print_endline "" ;
+      print_endline "| | | | | | | | | | | " ;
+      print_endline "" ;
+      let valargs = "valgrind " ^ entryval2str h.valargs ^ " " ^ entryval2str h.program in
+      let valresult = 
+        Unix.open_process_in valargs |> parse_valout in
+      match valresult with 
+      | Ok _ -> eval_entries t
+      | Error err -> Error err
+    with err -> Printexc.to_string err |> syserror end
+  | [] -> Ok ()
+  
+let reventries e = Ok (List.rev e)
+
+let check_entries = function 
+  | [] -> nothing "No entries found in Vestfile\n"
+  | entries -> Ok entries
+
 let alertentry newentry = function 
   | _::t -> newentry::t
   | [] -> []
-
+  
 let preventry = function 
   | h::_ -> h
   | [] -> { 
@@ -11,7 +50,7 @@ let preventry = function
       valargs = `Valargs ""; 
       program = `Program "" 
     }
-
+  
 let parse_entries symbols : (valentry list, operror) result  = 
   let rec parse expected entries symbols = match symbols with 
     | h::t ->
@@ -84,33 +123,3 @@ let parse_entries symbols : (valentry list, operror) result  =
           | _ -> unmatched end end
     | [] -> Ok entries in
   parse ExpectEntry [] symbols
-
-let rec parse_valout valoutc = 
-  try
-    let valline = input_line valoutc in
-    print_string valline ;
-    parse_valout valoutc
-  with 
-    | End_of_file -> 
-      Unix.close_process_in valoutc |> ignore ;
-      Ok ()
-    | _ -> 
-      Unix.close_process_in valoutc |> ignore ;
-      syserror "error: Failed to handle Valgrind output"
-
-let rec eval_entries valentries = 
-    match valentries with 
-    | h::t -> 
-      begin try 
-        let valargs = [|entryval2str h.valargs; entryval2str h.program|] in
-        let valresult = 
-          Unix.open_process_args_in "valgrind" valargs |> parse_valout in
-        match valresult with 
-        | Ok _ -> eval_entries t
-        | Error err -> Error err
-      with err -> Printexc.to_string err |> syserror end
-    | [] -> Ok ()
-  
-let check_entries = function 
-    | [] -> nothing "No entries found in Vestfile\n"
-    | entries -> Ok entries

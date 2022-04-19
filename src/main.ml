@@ -34,12 +34,13 @@ let () =
     >>= clean_emptysymbs 
     >>= parse_entries 
     >>= check_entries
+    >>= reventries
     >>= eval_entries
     (*
     *)
   in
   match result with 
-  | Ok value -> value (*|> print entry2str *)
+  | Ok value -> value 
   | Error err ->
     prerr err ;
     exit 1

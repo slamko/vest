@@ -1,2 +1,9 @@
-add: 
-    sldm l 
+add:
+    sldm add some ggg
+
+list: 
+    sldm list
+
+remove-entry:
+    sldm remove some
+
