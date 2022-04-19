@@ -1,4 +1,0 @@
-(executable
- (public_name vest)
- (name main)
- (libraries vest))
