@@ -2,11 +2,8 @@ CC=ocamlopt
 BIN=vest
 LIBS=unix.cmxa
 SRC_DIR=src
-TYPES=types
-SYMBOLS=symbols
-ENTRIES=entries
-MAIN=main
-SRC := $(addsuffix .mli, $(TYPES) $(SYMBOLS) $(ENTRIES)) $(addsuffix .ml, $(TYPES) $(SYMBOLS) $(ENTRIES) $(MAIN))
+UNITS=types symbols entries
+SRC:=$(addsuffix .mli, $(UNITS)) $(addsuffix .ml, $(UNITS) main)
 
 vpath %.mli $(SRC_DIR)
 vpath %.ml $(SRC_DIR)
