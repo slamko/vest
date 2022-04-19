@@ -56,6 +56,11 @@ let newentry text = {
   valargs = `Valargs ""; 
   program = `Program "" 
   }
+
+let swap_lastentry entries lastentry = 
+  let valargs = entryval2str lastentry.valargs in
+  let entrywithargs = { lastentry with program = `Program valargs; valargs = `Valargs "" } in
+  alertentry entrywithargs entries
   
 let parse_entries symbols : (valentry list, operror) result  = 
   let rec parse entries symbols expected = match symbols with 
@@ -103,15 +108,20 @@ let parse_entries symbols : (valentry list, operror) result  =
               | Newline -> parsedefault ExpectIndentation
               | Semicolon -> parsedefault ExpectProgram
               | _ -> unmatched end 
-            | _ -> unmatched end
+            | EOF -> Ok entries end
           | _ -> unmatched end
         | ExpectIndentation -> 
-          let unmatched = synsep Newline |> symval2readable |> unexpectedsymbol_error h in
+          let unmatched = Tab |> empty2readable |> unexpectedsymbol_error h in
           begin match h.value with
           | `Text text -> 
-            parse (newentry text :: entries) t ExpectColonSeparator
-          | `Empty _ -> parsedefault ExpectProgram
-          | _ -> unmatched end
+            let swapentries = swap_lastentry entries lastentry in
+            parse (newentry text :: swapentries) t ExpectColonSeparator
+          | `Separator sep -> begin match sep with 
+            | Syntactsep syntactsep -> begin match syntactsep with 
+              | Newline -> parse_rec
+              | _ -> unmatched end 
+            | EOF -> Ok entries end
+          | `Empty _ -> parsedefault ExpectProgram end
         | ExpectProgram -> 
           let unmatched = "Program" |> unexpectedsymbol_error h in
           begin match h.value with
@@ -121,9 +131,11 @@ let parse_entries symbols : (valentry list, operror) result  =
             parse nentries t ExpectCloseEntry
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Newline -> parsedefault ExpectProgram
+              | Newline -> parsedefault ExpectIndentation
               | _ -> unmatched end 
-            | _ -> unmatched end
+            | EOF -> 
+              let swapentries = swap_lastentry entries lastentry in
+              Ok swapentries end
           | `Empty _ -> parse_rec end
         | ExpectCloseEntry -> 
           let unmatched = synsep Newline |> symval2readable |> unexpectedsymbol_error h in
@@ -132,7 +144,7 @@ let parse_entries symbols : (valentry list, operror) result  =
             | Syntactsep syntactsep -> begin match syntactsep with 
               | Newline -> parsedefault ExpectEntry
               | _ -> unmatched end 
-            | EOF -> parsedefault ExpectEntry end
+            | EOF -> Ok entries end
           | _ -> unmatched end end
     | [] -> Ok entries in
   parse [] symbols ExpectEntry
