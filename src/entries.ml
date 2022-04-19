@@ -36,7 +36,7 @@ let rec eval_entries valentries =
 let reventries e = Ok (List.rev e)
 
 let check_entries = function 
-  | [] -> nothing "No entries found in Vestfile\n"
+  | [] -> nothing "No entries found in Vestfile"
   | entries -> Ok entries
 
 let alertentry newentry = function 
@@ -50,32 +50,37 @@ let preventry = function
       valargs = `Valargs ""; 
       program = `Program "" 
     }
+
+let newentry text = { 
+  name = text >> (fun s -> `Entryname s); 
+  valargs = `Valargs ""; 
+  program = `Program "" 
+  }
   
 let parse_entries symbols : (valentry list, operror) result  = 
-  let rec parse expected entries symbols = match symbols with 
+  let rec parse entries symbols expected = match symbols with 
     | h::t ->
         let lastentry = entries |> preventry in
+        let parsedefault = parse entries t in
+        let parse_rec = parsedefault expected in
         begin match expected with
         | ExpectEntry -> begin match h.value with
           | `Text text -> 
-            let newentry = { 
-              name = text >> (fun s -> `Entryname s); 
-              valargs = `Valargs ""; 
-              program = `Program "" 
-              } in
-            parse ExpectColonSeparator (newentry :: entries) t
+            let newvalentry = newentry text in
+            parse (newvalentry :: entries) t ExpectColonSeparator
           | `Separator sep -> begin match sep with 
             | EOF -> Ok entries 
-            | _ -> parse ExpectEntry entries t end
-          | _ -> parse ExpectEntry entries t end
+            | _ -> parse_rec end
+          | `Empty _ -> unexpectedsymbol_error h "Entry name" end
         | ExpectColonSeparator -> 
-          let unmatched = synsep Colon |> symval2str |> unexpectedsymbol_error h in
+          let unmatched = synsep Colon |> symval2readable |> unexpectedsymbol_error h in
           begin match h.value with
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Colon -> parse ExpectValargs entries t
+              | Colon -> parse entries t ExpectValargs
               | _ -> unmatched end 
             | _ -> unmatched end
+          | `Empty _ -> parse_rec
           | _ -> unmatched end
         | ExpectValargs -> 
           let unmatched = "Valgrind args" |> unexpectedsymbol_error h in
@@ -83,21 +88,29 @@ let parse_entries symbols : (valentry list, operror) result  =
           | `Text text -> 
             let entrywithargs = { lastentry with valargs = text >> (fun s -> `Valargs s) } in
             let nentries = alertentry entrywithargs entries in
-            parse ExpectTerminateArgs nentries t
+            parse nentries t ExpectTerminateArgs
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Newline -> parse ExpectProgram entries t
+              | Newline -> parsedefault ExpectProgram
               | _ -> unmatched end 
             | _ -> unmatched end
-          | _ -> unmatched end
+          | `Empty _ -> parse_rec end
         | ExpectTerminateArgs ->
-          let unmatched = synsep Newline |> symval2str |> unexpectedsymbol_error h in
+          let unmatched = synsep Newline |> symval2readable |> unexpectedsymbol_error h in
           begin match h.value with
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Newline -> parse ExpectProgram entries t
+              | Newline -> parsedefault ExpectIndentation
+              | Semicolon -> parsedefault ExpectProgram
               | _ -> unmatched end 
             | _ -> unmatched end
+          | _ -> unmatched end
+        | ExpectIndentation -> 
+          let unmatched = synsep Newline |> symval2readable |> unexpectedsymbol_error h in
+          begin match h.value with
+          | `Text text -> 
+            parse (newentry text :: entries) t ExpectColonSeparator
+          | `Empty _ -> parsedefault ExpectProgram
           | _ -> unmatched end
         | ExpectProgram -> 
           let unmatched = "Program" |> unexpectedsymbol_error h in
@@ -105,21 +118,21 @@ let parse_entries symbols : (valentry list, operror) result  =
           | `Text text -> 
             let entrywithprogram = { lastentry with program = text >> (fun s -> `Program s) } in
             let nentries = alertentry entrywithprogram entries in
-            parse ExpectCloseEntry nentries t
+            parse nentries t ExpectCloseEntry
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Newline -> parse ExpectProgram entries t
+              | Newline -> parsedefault ExpectProgram
               | _ -> unmatched end 
             | _ -> unmatched end
-          | _ -> unmatched end
+          | `Empty _ -> parse_rec end
         | ExpectCloseEntry -> 
-          let unmatched = synsep Newline |> symval2str |> unexpectedsymbol_error h in
+          let unmatched = synsep Newline |> symval2readable |> unexpectedsymbol_error h in
           begin match h.value with
           | `Separator sep -> begin match sep with 
             | Syntactsep syntactsep -> begin match syntactsep with 
-              | Newline -> parse ExpectEntry entries t
+              | Newline -> parsedefault ExpectEntry
               | _ -> unmatched end 
-            | EOF -> parse ExpectEntry entries t end
+            | EOF -> parsedefault ExpectEntry end
           | _ -> unmatched end end
     | [] -> Ok entries in
-  parse ExpectEntry [] symbols
+  parse [] symbols ExpectEntry

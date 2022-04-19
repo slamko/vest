@@ -7,7 +7,12 @@ let clean_emptysymbs symbols =
       begin match h.value with 
       | `Text _ -> h :: puresymbols |> clean t
       | `Separator _ -> h :: puresymbols |> clean t
-      | `Empty _ -> puresymbols |> clean t end
+      | `Empty _ -> 
+        begin match puresymbols with 
+        | lempty::_ -> begin match lempty.value with 
+          | `Empty _ -> puresymbols |> clean t 
+          | _ -> h :: puresymbols |> clean t end
+        | [] -> h :: puresymbols |> clean t end end
     | [] -> puresymbols in
   Ok (clean symbols [])
 
@@ -18,6 +23,7 @@ let parsechar chanel : (token, operror) result =
     | ' ' -> Ok Space
     | '\t' -> Ok Tab
     | ':' -> Ok Colon
+    | ';' -> Ok Semicolon
     | '\n' -> Ok Newline
     | _ -> Ok (Char c)
   with 
@@ -35,6 +41,7 @@ let matchtoken token : symval =
   | Tab -> `Empty Tab
   | Newline -> synsep Newline
   | Colon -> synsep Colon
+  | Semicolon -> synsep Semicolon
   | EOF -> `Separator EOF   
 
 let matchtokpref parsedsym token = 

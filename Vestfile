@@ -1,9 +1,3 @@
-add:
-    sldm add some ggg
-
-list: 
-    sldm list
-
-remove-entry:
-    sldm remove some
+list: --show-leak-kinds=definite
+ sldm l
 

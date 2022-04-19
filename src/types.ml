@@ -12,12 +12,14 @@ type token =
   | Space
   | Newline
   | Colon
+  | Semicolon
   | Tab
   | Char of char
   | EOF
 
 type syntactsep = 
   | Colon
+  | Semicolon
   | Newline
 
 type separator = 
@@ -61,6 +63,7 @@ type parsestate =
   | ExpectColonSeparator
   | ExpectValargs
   | ExpectTerminateArgs
+  | ExpectIndentation
   | ExpectProgram
   | ExpectCloseEntry
 
@@ -89,17 +92,28 @@ let sep2str = function
   | Syntactsep sep -> 
     begin match sep with 
     | Newline -> "New line"
-    | Colon -> "Colon" end
+    | Colon -> "Colon" 
+    | Semicolon -> "Semicolon" end
   | EOF -> "EOF"
 
 let empty2str = function 
   | Space -> " "
   | Tab -> "\t" 
 
+let empty2readable = function 
+  | Space -> "Space"
+  | Tab -> "Tab" 
+
 let symval2str = function 
   | `Text text -> sunwrap text 
   | `Separator sep -> sep2str sep
   | `Empty empty -> empty2str empty
+
+let symval2readable = function 
+  | `Text text -> sunwrap text 
+  | `Separator sep -> sep2str sep
+  | `Empty empty -> empty2readable empty
+
 
 let sym2str sym = symval2str sym.value
 
